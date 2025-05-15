@@ -1,0 +1,16 @@
+[package]
+name = "stakehaven"
+version = "1.0.0"
+authors = ["Meet Rathod"]
+
+[addresses]
+admin="0x718cdf2ef9e12ed4b823f4fe01e1c90bece93d1f4d28c6fa2b4ab36512339fdc"
+
+[dev-addresses]
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-core.git"
+rev = "devnet"
+subdir = "aptos-move/framework/aptos-framework"
+
+[dev-dependencies]
