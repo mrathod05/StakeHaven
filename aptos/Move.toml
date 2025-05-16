@@ -4,7 +4,7 @@ version = "1.0.0"
 authors = ["Meet Rathod"]
 
 [addresses]
-admin="0x718cdf2ef9e12ed4b823f4fe01e1c90bece93d1f4d28c6fa2b4ab36512339fdc"
+admin="0xb070a562582244953a72d187bd05ee837e18829f39d29fd8b4b4e9b3e407e5a5"
 
 [dev-addresses]
 

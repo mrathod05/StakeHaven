@@ -68,6 +68,13 @@ module admin::EmitEvents {
         created_at: u64
     }
 
+    #[event]
+    struct AirDropEvent has drop, store {
+        user_addr: address,
+        amount: u64,
+        created_at: u64
+    }
+
     public(friend) fun init_coin_event(owner_addr: address, name: String, ){
          event::emit(CoinInitEvent{
              name,
@@ -80,6 +87,17 @@ module admin::EmitEvents {
             owner_addr,
             receiver_addr,
             amount,
+        });
+    }
+
+    public(friend) fun airdrop_coin(
+        user_addr: address,
+        amount: u64,
+    ){
+        event::emit(AirDropEvent{
+            user_addr,
+            amount,
+            created_at: timestamp::now_seconds()
         });
     }
 

@@ -19,8 +19,14 @@ module admin::HavenCoin {
     //======================================== //
 
     //============= Errors ============ //
+        /// Insufficient Balance
         const E_INSUFFICIENT_BAL: u64 = 2;
+
+        /// Coin already initialized
         const E_COIN_ALREADY_INITIALIZED: u64 = 4;
+
+        /// User not register to the coin
+        const E_USER_NOT_REGISTER: u64 = 5;
     //================================ //
 
     struct HVC has store{}
@@ -63,6 +69,12 @@ module admin::HavenCoin {
         };
     }
 
+    public entry fun airdrop_coin(admin: &signer, addr: address, amount: u64){
+        assert_is_user_register(addr);
+        mint_coin(admin,addr, amount);
+        EmitEvents::airdrop_coin(addr, amount);
+    }
+
     //============= Helper ============ //
     #[view]
     public fun get_balance(addr: address): u64{
@@ -78,6 +90,10 @@ module admin::HavenCoin {
 
     public fun assert_is_coin_already_init(){
         assert!(coin::is_coin_initialized<HVC>(), E_COIN_ALREADY_INITIALIZED);
+    }
+
+    public fun assert_is_user_register(user_addr: address){
+        assert!(coin::is_account_registered<HVC>(user_addr), E_USER_NOT_REGISTER)
     }
     //================================ //
 

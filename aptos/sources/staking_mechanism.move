@@ -99,9 +99,9 @@ module admin::StakingMechanism {
         let staking_pool = borrow_global<StakingPool>(res_account);
         let user_stake = borrow_global<UserStack>(user_addr);
 
+
         let current_time = timestamp::now_seconds();
         let time_since_last_claim = current_time - user_stake.last_reward_claim;
-
         let reward = (user_stake.amount * staking_pool.reward_per_second * time_since_last_claim) / 1000_000;
         reward + user_stake.unclaimed_rewards
     }
@@ -148,6 +148,7 @@ module admin::StakingMechanism {
 
         if(staking_duration < min_stake_duration){
             let penalty = (amount * early_unstack_penalty_pct) / 100;
+
             actual_amount = amount - penalty;
 
             EmitEvents::withdraw_stake_penalty(
@@ -164,7 +165,7 @@ module admin::StakingMechanism {
         staking_pool.total_staked = total_staked;
 
         let res_signer = create_signer_with_capability(&staking_pool.signer_cap);
-        transfer_coin(&res_signer, user_addr, amount);
+        transfer_coin(&res_signer, user_addr, actual_amount);
 
         if(user_stake_amount == 0){
             let UserStack {
@@ -190,6 +191,30 @@ module admin::StakingMechanism {
         let res_addr = get_resource_address();
         transfer_coin(admin, res_addr, amount);
     }
+
+    //============= View ============ //
+    #[view]
+    public fun calculate_reward(user_addr: address): u64 acquires StakingPool, UserStack {
+        assert_is_staked(user_addr);
+        calculate_pending_reward(user_addr)
+    }
+
+    #[view]
+    public fun get_stake_info(user_addr: address): (u64, u64, u64, u64) acquires  UserStack {
+        assert_is_staked(user_addr);
+       let user_stake =  borrow_global<UserStack>(user_addr);
+        (user_stake.amount, user_stake.start_time, user_stake.last_reward_claim, user_stake.unclaimed_rewards)
+    }
+
+    #[view]
+    public fun get_stakepool_info(admin_addr: address): (u64, u64, u64, u64)
+    acquires  StakingPool {
+        asset_is_admin(admin_addr);
+        let res_addr = get_resource_address();
+        let stakepool = borrow_global<StakingPool>(res_addr);
+        (stakepool.reward_per_second,stakepool.total_staked,stakepool.min_stake_duration,stakepool.early_unstack_penalty_pct)
+    }
+    //================================ //
 
     //============= Helper ============ //
     fun assert_is_resource_account_exists(addr: address){

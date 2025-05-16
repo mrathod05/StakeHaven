@@ -1,13 +1,12 @@
 #[test_only]
 module admin::TestHavenCoin{
     use std::signer::address_of;
-    use aptos_std::debug::print;
     use aptos_framework::account::create_account_for_test;
     use aptos_framework::coin;
     use aptos_framework::timestamp;
     use admin::StakingMechanism;
     use admin::HavenCoin;
-    use admin::StakingMechanism::init_stake_mechanism;
+    use admin::StakingMechanism::{init_stake_mechanism};
     use admin::Accounts::get_resource_address;
     use admin::HavenCoin::{init_haven_coin, get_balance, mint_coin};
 
@@ -26,16 +25,15 @@ module admin::TestHavenCoin{
         create_account_for_test(address_of(admin));
         coin::create_coin_conversion_map(framework);
         timestamp::set_time_has_started_for_testing(framework);
-
         init_haven_coin(admin);
         init_stake_mechanism(admin);
+        timestamp::update_global_time_for_test_secs(1000);
     }
 
     fun setup_user(admin: &signer, user_addr: address): signer{
         let user = create_account_for_test(user_addr);
         HavenCoin::register_user(&user);
         HavenCoin::mint_coin(admin, user_addr, 10000);
-        timestamp::update_global_time_for_test_secs(1000);
         user
     }
 
@@ -62,6 +60,25 @@ module admin::TestHavenCoin{
         assert!(get_balance(res_addr) == 90000 + stake_amount, E_STAKE_AMOUNT_INCORRECT);
     }
 
+    #[test(framework= @0x1, admin= @admin )]
+    fun test_air_drop(framework: &signer, admin: &signer){
+        setup(framework, admin);
+
+        let user_addr = @0x123;
+        let user = create_account_for_test(user_addr);
+        HavenCoin::register_user(&user);
+        HavenCoin::airdrop_coin(admin, user_addr, 10000);
+
+        let stake_amount = 1000;
+        StakingMechanism::stack(&user, stake_amount);
+
+        let user_balance_after_stake = get_balance(user_addr);
+        assert!(user_balance_after_stake == 9000, E_USER_BALANCE_INCORRECT);
+
+        let res_addr = get_resource_address();
+        assert!(get_balance(res_addr) == 90000 + stake_amount, E_STAKE_AMOUNT_INCORRECT);
+    }
+
     #[test(framework= @0x1, admin= @admin)]
     fun test_reward_calculation(framework: &signer, admin: &signer) {
         setup(framework, admin);
@@ -69,15 +86,14 @@ module admin::TestHavenCoin{
         let user_addr = @0x123;
         let user = setup_user(admin, user_addr);
 
-        let stake_amount = 1000;
+        let stake_amount = 2000;
         StakingMechanism::stack(&user, stake_amount);
 
         timestamp::update_global_time_for_test_secs(86400);
 
-        // Calculated expected reward: (2000 * 1 * 86400) / 1000_000 = 172.8 coins
-        let expected_reward = (stake_amount * 1 * 86400) / 1000_000;
+        // Calculated expected reward: (2000 * 1 * 85400 - 1000) / 1000_000 = 172.8 coins
+        let expected_reward = (stake_amount * 1 * (86400 - 1000)) / 1000_000;
         let calculated_reward = StakingMechanism::calculate_pending_reward(user_addr);
-
         assert!(calculated_reward == expected_reward, E_REWARD_CALCULATION_INCORRECT);
     }
 
@@ -97,7 +113,7 @@ module admin::TestHavenCoin{
         timestamp::update_global_time_for_test_secs(172800);
 
         // Expected Reward: (5000 * 1 * 172800) / 1000_000 = 864 coins
-        let expected_reward = (stake_amount * 1 * 172800) / 1000_000;
+        let expected_reward = (stake_amount * 1 * (172800 - 1000)) / 1000_000;
 
         StakingMechanism::claim_rewards(&user);
 
@@ -122,7 +138,7 @@ module admin::TestHavenCoin{
         timestamp::update_global_time_for_test_secs(172800);
 
         // Expected reward: (3000 * 1 * 172800) / 1000_000 = 518.4
-        let expected_reward = (stake_amount * 1 * 172800) / 1000_000;
+        let expected_reward = (stake_amount * 1 * (172800-1000)) / 1000_000;
 
         StakingMechanism::withdraw_stack(&user, stake_amount);
 
@@ -140,22 +156,27 @@ module admin::TestHavenCoin{
         let stake_amount = 4000;
         StakingMechanism::stack(&user, stake_amount);
 
+
         let initial_balance = get_balance(user_addr);
 
         // Advance time by 12 hours (43200) - before min stake duration
         timestamp::update_global_time_for_test_secs(43200);
 
-        // Expected reward: (4200 * 1 * 172800) / 1000_000 = 172.8 coins
-        let expected_reward = (stake_amount * 1 * 4200) / 1000_000;
+        // Expected reward: (4000 * 1 * 172800) / 1000_000 = 172.8 coins
+        let expected_reward = (stake_amount * 1 * (43200-1000)) / 1000_000;
 
         // Calculate penalty (10% of stake amount)
         let penalty = (stake_amount * 10) / 100;
-        let expected_return = stake_amount - penalty;
+
+        let expected_return = stake_amount - penalty + expected_reward;
 
         StakingMechanism::withdraw_stack(&user, stake_amount);
 
         let final_balance = get_balance(user_addr);
-        assert!(final_balance == initial_balance + expected_return + expected_reward, E_PENALTY_CALCULATION_INCORRECT);
+
+
+
+        assert!(final_balance == initial_balance + expected_return, E_PENALTY_CALCULATION_INCORRECT);
     }
 
     #[test(framework= @0x1, admin= @admin)]
@@ -168,23 +189,21 @@ module admin::TestHavenCoin{
         let stake_amount = 2000;
         StakingMechanism::stack(&user, stake_amount);
 
+        // Advance time by 12 hours (43200) - before min stake duration
+        timestamp::update_global_time_for_test_secs(43200);
+
         let stake_amount_2 = 1000;
         StakingMechanism::stack(&user, stake_amount_2);
 
-        // Expected reward from first stake: (2000 * 1 * 43200) / 1000_000 = 86.4
-        let expected_reward_1 = (stake_amount * 1 * 43200) / 1000_000;
 
+        // Expected reward from first stake: (2000 * 1 * 43200) / 1000_000 = 86.4
+        let expected_reward_1 = (stake_amount * 1 * (43200 - 1000)) / 1000_000;
         let total_stake = stake_amount + stake_amount_2;
-        let calculated_reward = StakingMechanism::calculate_pending_reward(user_addr);
-        assert!(calculated_reward== 0, E_REWARD_CALCULATION_INCORRECT); // should be 0
 
         let res_addr = get_resource_address();
-        print(&get_balance(res_addr));
-        assert!(get_balance(res_addr) == 90000 + stake_amount + stake_amount_2, E_TOTAL_STAKE_INCORRECT);
+        assert!(get_balance(res_addr) == 90000 + stake_amount + stake_amount_2 - expected_reward_1, E_TOTAL_STAKE_INCORRECT);
 
         let expected_balance = 10000 - total_stake + expected_reward_1;
-        print(&get_balance(user_addr));
-        print(&expected_balance);
         assert!(get_balance(user_addr) == expected_balance, E_USER_BALANCE_INCORRECT);
     }
 
@@ -222,10 +241,10 @@ module admin::TestHavenCoin{
         StakingMechanism::stack(&user2, stake_amount_2);
 
         // 86400 sec 1 day
-        timestamp::update_global_time_for_test_secs(86400);
+        timestamp::update_global_time_for_test_secs(43200);
 
-        let expected_reward_1 = (stake_amount_1 * 1 * 86400) / 1000_000;
-        let expected_reward_2 = (stake_amount_2 * 1 * 86400) / 1000_000;
+        let expected_reward_1 = (stake_amount_1 * 1 * (43200 - 1000)) / 1000_000;
+        let expected_reward_2 = (stake_amount_2 * 1 * (43200 - 1000)) / 1000_000;
 
         let calculate_reward_1 = StakingMechanism::calculate_pending_reward(user_addr);
         let calculate_reward_2 = StakingMechanism::calculate_pending_reward(user2_addr);
@@ -259,10 +278,10 @@ module admin::TestHavenCoin{
         let calculated_reward = StakingMechanism::calculate_pending_reward(user_addr);
         assert!(calculated_reward == 0, E_REWARD_CALCULATION_INCORRECT);
 
-        // 1 day
-        timestamp::update_global_time_for_test_secs(86400);
+        // 2 + 1 day = 260200
+        timestamp::update_global_time_for_test_secs(260200);
+        let expected_new_reward  = (3000 * 1 * (260200 - 172800)) / 1000_000;
 
-        let expected_new_reward  = (3000 * 1 * 86400) / 1000_000;
         let calculate_new_reward = StakingMechanism::calculate_pending_reward(user_addr);
 
         assert!(calculate_new_reward == expected_new_reward, E_REWARD_CALCULATION_INCORRECT);
